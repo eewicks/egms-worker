@@ -12,13 +12,11 @@ use Carbon\Carbon;
 class DetectOutages extends Command
 {
     protected $signature = 'detect:outages';
-    protected $description = 'Detect devices that went offline and record outages';
+    protected $description = 'Detect device outages and send SMS';
 
     public function handle()
     {
-        $this->info("Worker running...");
-
-        $timeout = 60; 
+        $timeout = 60; // seconds without heartbeat to consider OFF
         $now = Carbon::now();
 
         $devices = Device::all();
@@ -28,53 +26,66 @@ class DetectOutages extends Command
             $isOffline = $device->last_seen &&
                          $device->last_seen->lt($now->subSeconds($timeout));
 
-            // DEVICE OFFLINE → CREATE OUTAGE
+            // ------------------------
+            // DEVICE OFFLINE
+            // ------------------------
             if ($isOffline && $device->status !== 'OFF') {
 
                 $household = Household::where('name', $device->household_name)->first();
                 $householdId = $household ? $household->id : null;
-
-                $weekNumber = now()->weekOfYear;
-                $isoYear = now()->isoWeekYear;
 
                 Outage::create([
                     'device_id'    => $device->id,
                     'household_id' => $householdId,
                     'started_at'   => now(),
                     'status'       => 'active',
-                    'week_number'  => $weekNumber,
-                    'iso_year'     => $isoYear,
+                    'week_number'  => now()->weekOfYear,
+                    'iso_year'     => now()->isoWeekYear
                 ]);
 
-                $device->status = 'OFF';
-                $device->save();
+                $device->update(['status' => 'OFF']);
 
-                $this->info("[OUTAGE CREATED] Device {$device->id}");
+                if ($device->contact_number) {
+                    $this->sendSMS(
+                        $device->contact_number,
+                        "⚠️ SOLECO Alert: Power outage detected for {$device->household_name}."
+                    );
+                }
+
                 continue;
             }
 
-            // DEVICE ONLINE AGAIN → CLOSE OUTAGE
+            // ------------------------
+            // DEVICE ONLINE (RECOVERED)
+            // ------------------------
             if (!$isOffline && $device->status === 'OFF') {
 
-                $active = Outage::where('device_id', $device->id)
+                $outage = Outage::where('device_id', $device->id)
                     ->whereNull('ended_at')
                     ->first();
 
-                if ($active) {
-                    $active->ended_at = now();
-                    $active->duration_seconds = now()->diffInSeconds($active->started_at);
-                    $active->status = 'closed';
-                    $active->save();
-
-                    $this->info("[OUTAGE CLOSED] Device {$device->id}");
+                if ($outage) {
+                    $outage->update([
+                        'ended_at' => now(),
+                        'duration_seconds' => now()->diffInSeconds($outage->started_at),
+                        'status' => 'closed'
+                    ]);
                 }
 
-                $device->status = 'ON';
-                $device->save();
+                $device->update(['status' => 'ON']);
             }
         }
 
-        $this->info("Worker cycle complete.");
         return Command::SUCCESS;
+    }
+
+    private function sendSMS($number, $message)
+    {
+        Http::asForm()->post("https://api.semaphore.co/api/v4/messages", [
+            "apikey"     => env('SEMAPHORE_API_KEY'),
+            "number"     => $number,
+            "message"    => $message,
+            "sendername" => env('SEMAPHORE_SENDER_NAME', 'SOLECO')
+        ]);
     }
 }

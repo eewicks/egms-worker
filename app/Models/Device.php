@@ -10,9 +10,11 @@ class Device extends Model
         'household_id',
         'household_name',
         'contact_number',
-        'status',
         'last_seen',
+        'status'
     ];
 
-    protected $dates = ['last_seen'];
+    protected $casts = [
+        'last_seen' => 'datetime'
+    ];
 }

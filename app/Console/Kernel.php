@@ -13,11 +13,6 @@ class Kernel extends ConsoleKernel
 
     protected function schedule(Schedule $schedule)
     {
-        // No cron needed because Railway loops it
-    }
-
-    protected function commands()
-    {
-        $this->load(__DIR__.'/Commands');
+        $schedule->command('detect:outages')->everyMinute();
     }
 }
