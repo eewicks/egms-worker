@@ -8,13 +8,18 @@ class Device extends Model
 {
     protected $fillable = [
         'household_id',
-        'household_name',
-        'contact_number',
-        'last_seen',
-        'status'
+        'device_id',
+        'barangay',
+        'status',
+        'last_seen'
     ];
 
     protected $casts = [
         'last_seen' => 'datetime'
     ];
+
+    public function household()
+    {
+        return $this->belongsTo(Household::class);
+    }
 }
