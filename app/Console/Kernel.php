@@ -7,12 +7,12 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
 class Kernel extends ConsoleKernel
 {
-    protected $commands = [
-        \App\Console\Commands\DetectOutages::class,
-    ];
+protected $commands = [
+    \App\Console\Commands\DetectOutages::class,
+];
 
-    protected function schedule(Schedule $schedule)
-    {
-        $schedule->command('detect:outages')->everyMinute();
-    }
+protected function schedule(Schedule $schedule)
+{
+    $schedule->command('detect:outages')->everyMinute();
+}
 }
